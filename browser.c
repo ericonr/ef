@@ -8,9 +8,8 @@
 
 #include <curses.h>
 
-enum my_keycodes {
-	MY_CTRLW = 7000,
-};
+#include "string-array.h"
+#include "util.h"
 
 static void endwin_void(void)
 {
@@ -23,82 +22,26 @@ static void finish(int sig)
 	quick_exit(1);
 }
 
-struct str_array {
-	const char **v;
-	bool *m;
-	size_t n, c;
-};
-
-static void add_entry(struct str_array *a, const char *s)
-{
-	if (a->n == a->c) {
-		if (a->c == 0) a->c = 32;
-		else a->c *= 2;
-		a->v = realloc(a->v, sizeof(*a->v) * a->c);
-		a->m = realloc(a->m, sizeof(*a->m) * a->c);
-		if (!a->v || !a->m) {
-			perror("realloc");
-			exit(1);
-		}
-	}
-
-	a->v[a->n] = s;
-	a->m[a->n] = false;
-	a->n++;
-}
-
-static inline const char *get_entry(const struct str_array *a, size_t i)
-{
-	return a->v[i];
-}
-
-static inline const char *get_entry_match(const struct str_array *a, size_t i)
-{
-	return a->m[i] ? a->v[i] : NULL;
-}
-
-static void filter_entries(struct str_array *a, const char *s)
-{
-	for (size_t i = 0; i < a->n; i++) {
-		a->m[i] = strstr(a->v[i], s);
-	}
-}
-
-static void print_entries(const struct str_array *a)
-{
-	for (size_t i = 0; i < a->n; i++) {
-		printf("entry %zu: %s\n", i, get_entry(a, i));
-	}
-}
-
 int main()
 {
 	signal(SIGINT, finish);
 	atexit(endwin_void);
 	at_quick_exit(endwin_void);
 
-	char delim = '\n';
+	const char delim = '\n';
 
 	struct str_array entries = { 0 };
+	read_entries_from_stream(&entries, delim, stdin);
 
-	char *line = NULL;
-	size_t tmp = 0;
-	{
-		ssize_t n;
-		while ((n = getdelim(&line, &tmp, delim, stdin)) >= 0) {
-			if (line[n-1] == '\n') line[n-1] = 0;
-			add_entry(&entries, line);
-
-			line = NULL;
-			tmp = 0;
-		}
-		if (dup2(STDERR_FILENO, STDIN_FILENO) != STDIN_FILENO) {
-			perror("dup2");
-			exit(1);
-		}
+	/* use stderr for input instead of stdin, since we got the list from stdin */
+	if (dup2(STDERR_FILENO, STDIN_FILENO) != STDIN_FILENO) {
+		perror("dup2");
+		exit(1);
 	}
 
+	/* curses initialization */
 	initscr();
+	/* terminal configuration */
 	nonl();
 	cbreak();
 	noecho();
@@ -108,6 +51,7 @@ int main()
 		init_pair(1, COLOR_GREEN, COLOR_BLACK);
 		// red,green,yellow,blue,cyan,magenta,white
 	}
+	/* noop function - should use the windows from below */
 	attrset(COLOR_PAIR(1));
 
 	WINDOW *list = newwin(LINES - 1, 0, 0, 0);
@@ -119,6 +63,8 @@ int main()
 	keypad(prompt, TRUE);
 	keypad(list, TRUE);
 
+	/* inital dump of list
+	 * TODO: needs scroll support */
 	for (size_t i = 0; i < entries.n; i++) {
 		mvwaddstr(list, i, 0, get_entry(&entries, i));
 	}
@@ -127,6 +73,8 @@ int main()
 	mvwaddstr(prompt, 0, 0, "> ");
 	wrefresh(prompt);
 
+	/* limited name size
+	 * TODO: use dynamic string and str_array so we can search on a group of tokens */
 	char name[1024] = { 0 };
 	size_t n = 0;
 	while (n < sizeof name) {
