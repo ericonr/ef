@@ -35,6 +35,7 @@ int main()
 
 	struct str_array entries = { 0 };
 	read_entries_from_stream(&entries, delim, stdin);
+	filter_entries(&entries, NULL);
 
 	int tmp_fd;
 	/* use stderr for input instead of stdin, since we get the entries from stdin */
@@ -68,21 +69,22 @@ int main()
 	/* noop function - should use the windows from below */
 	attrset(COLOR_PAIR(1));
 
-	WINDOW *list = newwin(LINES - 1, 0, 0, 0);
+	/* store number of rows that can be displayed in list */
+	const int nrows = LINES - 1;
+
+	WINDOW *list = newpad(entries.n, COLS);
 	WINDOW *prompt = newwin(1, 0, LINES - 1, 0);
 	if (!list || !prompt) {
 		perror("newwin");
 		exit(1);
 	}
 	keypad(prompt, TRUE);
-	keypad(list, TRUE);
 
-	/* inital dump of list
-	 * TODO: needs scroll support */
+	/* inital dump of list */
 	for (size_t i = 0; i < entries.n; i++) {
 		mvwaddstr(list, i, 0, get_entry(&entries, i));
 	}
-	wrefresh(list);
+	prefresh(list, 0, 0, 0, 0, nrows - 1, COLS);
 
 	mvwaddstr(prompt, 0, 0, "> ");
 	wrefresh(prompt);
@@ -91,29 +93,64 @@ int main()
 	 * TODO: use dynamic string and str_array so we can search on a group of tokens */
 	char name[1024] = { 0 };
 	size_t n = 0;
-	while (n < sizeof name) {
+	/* listx isn't changed anywhere */
+	int listx = 0, listy = 0;
+	while (n < sizeof name - 1) {
+		bool name_changed = false;
 		int c = wgetch(prompt);
 		switch (c) {
+			/* Ctrl+[ or ESC */
+			case 27:
+				exit(1);
+				break;
+
 			case KEY_ENTER:
 			case '\r':
 				/* since we are using nonl above, only capture '\r' itself
 				 * TODO: actually store the entry name */
 				final_name = name;
 				exit(0);
-			case KEY_BACKSPACE:
-			case 127:
-				name[n] = 0;
-				if (n) n--;
+
+			case KEY_DOWN:
+			/* Ctrl-N */
+			case 14:
+				if ((size_t)listy < entries.n && (size_t)nrows < entries.ms ) listy++;
 				break;
-			case KEY_DL:
-				name[0] = 0;
+
+			case KEY_UP:
+			/* Ctrl-P */
+			case 16:
+				if (listy) listy--;
+				break;
+
+			/* Ctrl+W */
+			case 23:
 				n = 0;
+				name[n] = 0;
+				name_changed = true;
 				break;
+
+			case KEY_BACKSPACE:
+			/* DEL */
+			case 127:
+				if (n) n--;
+				name[n] = 0;
+				name_changed = true;
+				break;
+
 			default:
 				name[n] = c;
 				n++;
+				/* clear chars from previous entries */
+				name[n] = 0;
+				name_changed = true;
 				break;
 		}
+		if (!name_changed) {
+			prefresh(list, listy, listx, 0, 0, nrows-1, COLS);
+			continue;
+		}
+
 		werase(prompt);
 		mvwaddstr(prompt, 0, 0, "> ");
 		waddstr(prompt, name);
@@ -123,10 +160,12 @@ int main()
 		werase(list);
 		int line = 0;
 		for (size_t i = 0; i < entries.n; i++) {
-			const char *e = get_entry_match(&entries, i);
+			const char *e = get_entry_if_match(&entries, i);
 			if (e) mvwaddstr(list, line++, 0, e);
 		}
-		wrefresh(list);
+		/* reset vertical position when name changes */
+		listy = 0;
+		prefresh(list, listy, listx, 0, 0, nrows-1, COLS);
 	}
 
 	return 0;

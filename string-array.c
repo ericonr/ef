@@ -18,14 +18,19 @@ void add_entry(struct str_array *a, const char *s)
 	}
 
 	a->v[a->n] = s;
-	a->m[a->n] = false;
 	a->n++;
 }
 
 void filter_entries(struct str_array *a, const char *s)
 {
+	if (!s) {
+		a->ms = a->n;
+		return;
+	}
+
+	a->ms = 0;
 	for (size_t i = 0; i < a->n; i++) {
-		a->m[i] = strstr(a->v[i], s);
+		if ((a->m[i] = strstr(a->v[i], s))) a->ms++;
 	}
 }
 

@@ -4,8 +4,13 @@
 #include <stdbool.h>
 
 struct str_array {
+	/* strings in the array */
 	const char **v;
+	/* flag to say if they fit a certain condition or not */
 	bool *m;
+	/* total number of true in m */
+	size_t ms;
+	/* number of elements, maximum number of elements */
 	size_t n, c;
 };
 
@@ -15,9 +20,14 @@ static inline const char *get_entry(const struct str_array *a, size_t i)
 	return a->v[i];
 }
 
-static inline const char *get_entry_match(const struct str_array *a, size_t i)
+static inline bool get_entry_match(const struct str_array *a, size_t i)
 {
-	return a->m[i] ? a->v[i] : NULL;
+	return a->m[i];
+}
+
+static inline const char *get_entry_if_match(const struct str_array *a, size_t i)
+{
+	return get_entry_match(a, i) ? a->v[i] : NULL;
 }
 
 void add_entry(struct str_array *, const char *);
