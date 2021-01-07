@@ -3,18 +3,15 @@
 #include <stdio.h>
 
 #include "string-array.h"
+#include "util.h"
 
 void add_entry(struct str_array *a, char *s)
 {
 	if (a->n == a->c) {
 		if (a->c == 0) a->c = 32;
 		else a->c *= 2;
-		a->v = realloc(a->v, sizeof(*a->v) * a->c);
-		a->m = realloc(a->m, sizeof(*a->m) * a->c);
-		if (!a->v || !a->m) {
-			perror("realloc");
-			exit(1);
-		}
+		a->v = xrealloc(a->v, sizeof(*a->v) * a->c);
+		a->m = xrealloc(a->m, sizeof(*a->m) * a->c);
 	}
 
 	a->v[a->n] = s;
