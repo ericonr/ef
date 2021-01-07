@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include <malloc.h>
+#include <locale.h>
 
 #include <curses.h>
 
@@ -32,6 +33,8 @@ static void finish(int sig)
 
 int main()
 {
+	setlocale(LC_ALL, "");
+
 	const char delim = '\n';
 
 	struct str_array entries = { 0 };

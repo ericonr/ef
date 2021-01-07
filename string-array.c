@@ -1,6 +1,8 @@
+#define _GNU_SOURCE
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <ctype.h>
 
 #include "string-array.h"
 #include "util.h"
@@ -24,6 +26,8 @@ char *pop_entry(struct str_array *a)
 	return get_entry(a, a->n);
 }
 
+typedef char * (*substring_search)(const char *, const char*);
+
 void filter_entries(struct str_array *a, const struct str_array *m)
 {
 	if (!m) {
@@ -31,13 +35,29 @@ void filter_entries(struct str_array *a, const struct str_array *m)
 		return;
 	}
 
+	/* find if any strings are capitalized */
+	bool capitalized = false;
+	for (size_t i = 0; i < m->n; i++) {
+		char *s = get_entry(m, i);
+		size_t l = strlen(s);
+		for (size_t j = 0; j < l; j++) {
+			if (isupper(s[j])) {
+				capitalized = true;
+				break;
+			}
+		}
+		if (capitalized) break;
+	}
+	/* we only care about case if there is an upper char */
+	substring_search fn = capitalized ? strstr : strcasestr;
+
 	a->ms = 0;
 	for (size_t i = 0; i < m->n; i++) {
 		for (size_t j = 0; j < a->n; j++) {
 			/* first token or was previously true */
 			if (i == 0 || a->m[j]) {
 				/* only count matches in the last round */
-				if ((a->m[j] = strstr(a->v[j], m->v[i])) && (i == m->n - 1)) {
+				if ((a->m[j] = fn(a->v[j], m->v[i])) && (i == m->n - 1)) {
 					a->ms++;
 				}
 			}
