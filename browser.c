@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <stdbool.h>
 #include <string.h>
+#include <malloc.h>
 
 #include <curses.h>
 
@@ -90,18 +91,14 @@ int main()
 	wrefresh(prompt);
 
 	struct str_array toks = { 0 };
-	size_t n;
+	size_t n, cap;
 	char *name = NULL;
 	/* listx isn't changed anywhere */
 	int listx = 0, listy = 0;
 	for (;;) {
 		if (!name) {
-			/* TODO: find way to track allocation size and update it when needed */
-			name = malloc(1024);
-			if (!name) {
-				perror("malloc");
-				exit(1);
-			}
+			cap = 1024;
+			name = xmalloc(cap);
 
 			n = 0;
 			name[n] = 0;
@@ -149,6 +146,7 @@ int main()
 				if (toks.n > 1 && n == 0) {
 					free(pop_entry(&toks));
 					name = get_entry(&toks, toks.n - 1);
+					cap = malloc_usable_size(name);
 					n = strlen(name);
 					name_changed = true;
 					break;
@@ -166,9 +164,13 @@ int main()
 				break;
 
 			default:
+				if (n == cap) {
+					cap *= 2;
+					name = xrealloc(name, cap);
+				}
 				name[n] = c;
 				n++;
-				/* clear chars from previous entries */
+				/* clear chars from previous entries and/or dirty memory */
 				name[n] = 0;
 				name_changed = true;
 				break;
