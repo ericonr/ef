@@ -71,13 +71,39 @@ int main()
 		init_pair(1, COLOR_GREEN, COLOR_BLACK);
 		// red,green,yellow,blue,cyan,magenta,white
 	}
-	/* noop function - should use the windows from below */
-	attrset(COLOR_PAIR(1));
+	int cattr = COLOR_PAIR(1) | A_BOLD;
+	int nattr = A_NORMAL;
+
+	/* list should work as follows:
+	 *   - can fit up to entries.n
+	 *   - element 0 is at the bottom (entries.n - 1)
+	 *   - last element is at the top (0)
+	 */
 
 	/* store number of rows that can be displayed in list */
 	const int nrows = LINES - 1;
+	/* list position in x and y;
+	 * listx currently isn't changed anywhere */
+	int listy;
+	const int listx = 0;
+	/* current pick */
+	size_t pick = 0;
+	/* list size */
+	int listsize;
 
-	WINDOW *list = newpad(entries.n, COLS);
+	if (entries.n <= (size_t)nrows) {
+		/* list should be at least as big as nrows */
+		listsize = nrows;
+
+		listy = 0;
+	} else {
+		listsize = entries.n;
+
+		/* move to position where we show the end of the list */
+		listy = entries.n - nrows;
+	}
+
+	WINDOW *list = newpad(listsize, COLS);
 	WINDOW *prompt = newwin(1, 0, LINES - 1, 0);
 	if (!list || !prompt) {
 		perror("newwin");
@@ -85,20 +111,24 @@ int main()
 	}
 	keypad(prompt, TRUE);
 
-	/* inital dump of list */
-	for (size_t i = 0; i < entries.n; i++) {
-		mvwaddstr(list, i, 0, get_entry(&entries, i));
-	}
-	prefresh(list, 0, 0, 0, 0, nrows - 1, COLS);
-
+	/* initial prompt */
 	mvwaddstr(prompt, 0, 0, "> ");
 	wrefresh(prompt);
 
-	struct str_array toks = { 0 };
+#define WRITELIST(idx) mvwaddstr(list, listsize - idx - 1, 0, get_entry(&entries, idx))
+	/* inital dump of list */
+	for (size_t i = 0; i < entries.n; i++) {
+		if (i == pick) wattrset(list, cattr);
+		WRITELIST(i);
+		if (i == pick) wattrset(list, nattr);
+	}
+	prefresh(list, listy, listx, 0, 0, nrows-1, COLS);
+
+	/* variables to control current search token */
 	size_t n, cap;
 	char *name = NULL;
-	/* listx isn't changed anywhere */
-	int listx = 0, listy = 0;
+	/* search tokens */
+	struct str_array toks = { 0 };
 	for (;;) {
 		if (!name) {
 			cap = 1024;
@@ -109,62 +139,53 @@ int main()
 			add_entry(&toks, name);
 		}
 
-		bool name_changed = false;
+		int pos_change = 0;
 		int c = wgetch(prompt);
 		switch (c) {
-			/* Ctrl+[ or ESC */
-			case 27:
+			case 27: /* Ctrl+[ or ESC */
 				exit(1);
 				break;
 
 			case KEY_ENTER:
 			case '\r':
-				/* since we are using nonl above, only capture '\r' itself
-				 * TODO: actually store the entry name */
-				final_name = name;
+				/* since we are using nonl above, only capture '\r' itself */
+				final_name = get_entry(&entries, pick);
 				exit(0);
 
 			case KEY_DOWN:
-			/* Ctrl-N */
-			case 14:
-				if ((size_t)listy < entries.n && (size_t)nrows < entries.ms ) listy++;
+			case 14: /* Ctrl-N */
+				pos_change = -1;
 				break;
 
 			case KEY_UP:
-			/* Ctrl-P */
-			case 16:
-				if (listy) listy--;
+			case 16: /* Ctrl-P */
+				pos_change = +1;
 				break;
 
-			/* Ctrl+W */
-			case 23:
+			/* TODO: treat n==0 */
+			case 23: /* Ctrl+W */
 				n = 0;
 				name[n] = 0;
-				name_changed = true;
 				break;
 
 			case KEY_BACKSPACE:
-			/* DEL */
-			case 127:
+			case 127: /* DEL */
 				/* go back to previous word */
 				if (toks.n > 1 && n == 0) {
 					free(pop_entry(&toks));
 					name = get_entry(&toks, toks.n - 1);
 					cap = malloc_usable_size(name);
 					n = strlen(name);
-					name_changed = true;
 					break;
 				}
 				if (n) n--;
 				name[n] = 0;
-				name_changed = true;
 				break;
 
 			case ' ':
 				if (*name) {
 					name = NULL;
 				}
-				name_changed = true;
 				break;
 
 			default:
@@ -176,11 +197,45 @@ int main()
 				n++;
 				/* clear chars from previous entries and/or dirty memory */
 				name[n] = 0;
-				name_changed = true;
 				break;
 		}
-		if (!name_changed) {
+
+		if (pos_change) {
+			const size_t old_pick = pick;
+			/* XXX: trusting integer overflow to work things out here */
+			for (size_t i = pick + pos_change; i < entries.n; i += pos_change) {
+				if (get_entry_match(&entries, i)) {
+					pick = i;
+					break;
+				}
+			}
+			if (pick == old_pick) continue;
+
+			/* clean up appearance */
+			wattrset(list, nattr);
+			WRITELIST(old_pick);
+			wattrset(list, cattr);
+			WRITELIST(pick);
+			wattrset(list, nattr);
+
+			/* find index inside set of matches */
+			size_t index_in_matched = 0;
+			for (size_t i = 0; i < pick; i++) {
+				if (get_entry_match(&entries, i)) index_in_matched++;
+			}
+
+			/* check if all matched entries fit in visible list */
+			if (entries.ms <= (size_t)nrows) {
+				/* pass */
+			} else {
+				/* check if pick is above or below */
+				const size_t bottom = (entries.ms) - (listy+nrows);
+				const size_t top = bottom + nrows - 1;
+				if (index_in_matched < bottom) listy++;
+				else if (index_in_matched > top) listy--;
+			}
 			prefresh(list, listy, listx, 0, 0, nrows-1, COLS);
+
 			continue;
 		}
 
