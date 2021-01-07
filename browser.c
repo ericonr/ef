@@ -39,6 +39,7 @@ int main()
 
 	struct str_array entries = { 0 };
 	read_entries_from_stream(&entries, delim, stdin);
+	sort_entries(&entries);
 	filter_entries(&entries, NULL);
 
 	int tmp_fd;

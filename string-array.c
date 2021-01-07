@@ -32,6 +32,9 @@ void filter_entries(struct str_array *a, const struct str_array *m)
 {
 	if (!m) {
 		a->ms = a->n;
+		for (size_t i = 0; i < a->n; i++) {
+			a->m[i] = true;
+		}
 		return;
 	}
 
@@ -63,6 +66,17 @@ void filter_entries(struct str_array *a, const struct str_array *m)
 			}
 		}
 	}
+}
+
+#define VOIDTOCHAR(x) (*(const char **)x)
+static int str_a_item_cmp(const void *a, const void *b)
+{
+	return strcmp(VOIDTOCHAR(a), VOIDTOCHAR(b));
+}
+
+void sort_entries(struct str_array *a)
+{
+	qsort(a->v, a->n, sizeof(*a->v), str_a_item_cmp);
 }
 
 void print_entries(const struct str_array *a)

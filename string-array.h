@@ -33,6 +33,7 @@ static inline char *get_entry_if_match(const struct str_array *a, size_t i)
 void add_entry(struct str_array *, char *);
 char *pop_entry(struct str_array *);
 void filter_entries(struct str_array *, const struct str_array *);
+void sort_entries(struct str_array *);
 void print_entries(const struct str_array *);
 
 #endif
