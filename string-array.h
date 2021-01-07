@@ -5,7 +5,7 @@
 
 struct str_array {
 	/* strings in the array */
-	const char **v;
+	char **v;
 	/* flag to say if they fit a certain condition or not */
 	bool *m;
 	/* total number of true in m */
@@ -15,7 +15,7 @@ struct str_array {
 };
 
 
-static inline const char *get_entry(const struct str_array *a, size_t i)
+static inline char *get_entry(const struct str_array *a, size_t i)
 {
 	return a->v[i];
 }
@@ -25,13 +25,14 @@ static inline bool get_entry_match(const struct str_array *a, size_t i)
 	return a->m[i];
 }
 
-static inline const char *get_entry_if_match(const struct str_array *a, size_t i)
+static inline char *get_entry_if_match(const struct str_array *a, size_t i)
 {
 	return get_entry_match(a, i) ? a->v[i] : NULL;
 }
 
-void add_entry(struct str_array *, const char *);
-void filter_entries(struct str_array *, const char *);
+void add_entry(struct str_array *, char *);
+char *pop_entry(struct str_array *);
+void filter_entries(struct str_array *, const struct str_array *);
 void print_entries(const struct str_array *);
 
 #endif

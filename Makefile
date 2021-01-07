@@ -1,7 +1,7 @@
 SRC = browser.c string-array.c util.c
 OBJ = $(SRC:%.c=%.o)
 EXE = browser
-CFLAGS = -Wall -Wextra
+CFLAGS = -Wall -Wextra -g
 LDLIBS = -lcurses
 
 all: $(EXE)

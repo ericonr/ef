@@ -89,13 +89,25 @@ int main()
 	mvwaddstr(prompt, 0, 0, "> ");
 	wrefresh(prompt);
 
-	/* limited name size
-	 * TODO: use dynamic string and str_array so we can search on a group of tokens */
-	char name[1024] = { 0 };
-	size_t n = 0;
+	struct str_array toks = { 0 };
+	size_t n;
+	char *name = NULL;
 	/* listx isn't changed anywhere */
 	int listx = 0, listy = 0;
-	while (n < sizeof name - 1) {
+	for (;;) {
+		if (!name) {
+			/* TODO: find way to track allocation size and update it when needed */
+			name = malloc(1024);
+			if (!name) {
+				perror("malloc");
+				exit(1);
+			}
+
+			n = 0;
+			name[n] = 0;
+			add_entry(&toks, name);
+		}
+
 		bool name_changed = false;
 		int c = wgetch(prompt);
 		switch (c) {
@@ -133,8 +145,23 @@ int main()
 			case KEY_BACKSPACE:
 			/* DEL */
 			case 127:
+				/* go back to previous word */
+				if (toks.n > 1 && n == 0) {
+					free(pop_entry(&toks));
+					name = get_entry(&toks, toks.n - 1);
+					n = strlen(name);
+					name_changed = true;
+					break;
+				}
 				if (n) n--;
 				name[n] = 0;
+				name_changed = true;
+				break;
+
+			case ' ':
+				if (*name) {
+					name = NULL;
+				}
 				name_changed = true;
 				break;
 
@@ -152,10 +179,19 @@ int main()
 		}
 
 		werase(prompt);
-		mvwaddstr(prompt, 0, 0, "> ");
-		waddstr(prompt, name);
+		mvwaddstr(prompt, 0, 0, ">");
+		for (size_t i = 0; i < toks.n; i++) {
+			const char *e = get_entry(&toks, i);
+			waddch(prompt, ' ');
+			waddstr(prompt, e);
+		}
+		/* show space if string is empty */
+		if (!name) waddch(prompt, ' ');
+
 		wrefresh(prompt);
-		filter_entries(&entries, name);
+		if (!name) continue;
+
+		filter_entries(&entries, &toks);
 
 		werase(list);
 		int line = 0;

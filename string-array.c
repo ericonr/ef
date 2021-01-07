@@ -4,7 +4,7 @@
 
 #include "string-array.h"
 
-void add_entry(struct str_array *a, const char *s)
+void add_entry(struct str_array *a, char *s)
 {
 	if (a->n == a->c) {
 		if (a->c == 0) a->c = 32;
@@ -21,16 +21,30 @@ void add_entry(struct str_array *a, const char *s)
 	a->n++;
 }
 
-void filter_entries(struct str_array *a, const char *s)
+char *pop_entry(struct str_array *a)
 {
-	if (!s) {
+	a->n--;
+	return get_entry(a, a->n);
+}
+
+void filter_entries(struct str_array *a, const struct str_array *m)
+{
+	if (!m) {
 		a->ms = a->n;
 		return;
 	}
 
 	a->ms = 0;
-	for (size_t i = 0; i < a->n; i++) {
-		if ((a->m[i] = strstr(a->v[i], s))) a->ms++;
+	for (size_t i = 0; i < m->n; i++) {
+		for (size_t j = 0; j < a->n; j++) {
+			/* first token or was previously true */
+			if (i == 0 || a->m[j]) {
+				/* only count matches in the last round */
+				if ((a->m[j] = strstr(a->v[j], m->v[i])) && (i == m->n - 1)) {
+					a->ms++;
+				}
+			}
+		}
 	}
 }
 
