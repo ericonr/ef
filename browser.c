@@ -16,6 +16,13 @@ static void endwin_void(void)
 	endwin();
 }
 
+static const char *final_name;
+static FILE* stdout_save;
+static void print_name(void)
+{
+	if (stdout_save && final_name) fputs(final_name, stdout_save);
+}
+
 static void finish(int sig)
 {
 	(void)sig;
@@ -24,20 +31,27 @@ static void finish(int sig)
 
 int main()
 {
-	signal(SIGINT, finish);
-	atexit(endwin_void);
-	at_quick_exit(endwin_void);
-
 	const char delim = '\n';
 
 	struct str_array entries = { 0 };
 	read_entries_from_stream(&entries, delim, stdin);
 
-	/* use stderr for input instead of stdin, since we got the list from stdin */
-	if (dup2(STDERR_FILENO, STDIN_FILENO) != STDIN_FILENO) {
-		perror("dup2");
+	int tmp_fd;
+	/* use stderr for input instead of stdin, since we get the entries from stdin */
+	if (dup2(STDERR_FILENO, STDIN_FILENO) != STDIN_FILENO ||
+	    /* use stderr for output as well, since we should only print the result to stdout */
+	    (tmp_fd = dup(STDOUT_FILENO)) < 0 ||
+	    (stdout_save = fdopen(tmp_fd, "w")) == NULL ||
+	    dup2(STDERR_FILENO, STDOUT_FILENO) != STDOUT_FILENO) {
+		perror("fd dance");
 		exit(1);
 	}
+
+	atexit(print_name);
+
+	signal(SIGINT, finish);
+	atexit(endwin_void);
+	at_quick_exit(endwin_void);
 
 	/* curses initialization */
 	initscr();
@@ -80,6 +94,12 @@ int main()
 	while (n < sizeof name) {
 		int c = wgetch(prompt);
 		switch (c) {
+			case KEY_ENTER:
+			case '\r':
+				/* since we are using nonl above, only capture '\r' itself
+				 * TODO: actually store the entry name */
+				final_name = name;
+				exit(0);
 			case KEY_BACKSPACE:
 			case 127:
 				name[n] = 0;
