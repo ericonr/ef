@@ -39,6 +39,13 @@ int main()
 
 	struct str_array entries = { 0 };
 	read_entries_from_stream(&entries, delim, stdin);
+	/* fast exit cases */
+	if (entries.n == 0) exit(0);
+	if (entries.n == 1) {
+		puts(get_entry(&entries, 0));
+		exit(0);
+	}
+	/* end of fast exit cases */
 	sort_entries(&entries);
 	filter_entries(&entries, NULL);
 
@@ -81,7 +88,7 @@ int main()
 	 */
 
 	/* store number of rows that can be displayed in list */
-	const int nrows = LINES - 1;
+	const size_t nrows = LINES - 1;
 	/* list position in x and y;
 	 * listx currently isn't changed anywhere */
 	int listy;
@@ -91,7 +98,7 @@ int main()
 	/* list size */
 	int listsize;
 
-	if (entries.n <= (size_t)nrows) {
+	if (entries.n <= nrows) {
 		/* list should be at least as big as nrows */
 		listsize = nrows;
 
@@ -151,9 +158,9 @@ int main()
 				break;
 
 			case KEY_ENTER:
-			case '\r':
-				/* since we are using nonl above, only capture '\r' itself */
-				final_name = get_entry(&entries, pick);
+			case '\r': /* since we are using nonl above, only capture '\r' itself */
+				/* only set final_name if there are actual results */
+				if (entries.ms) final_name = get_entry(&entries, pick);
 				exit(0);
 
 			case KEY_DOWN:
@@ -230,7 +237,7 @@ int main()
 			wattrset(list, nattr);
 
 			/* check if all matched entries fit in visible list */
-			if (entries.ms <= (size_t)nrows) {
+			if (entries.ms <= nrows) {
 				/* pass */
 			} else {
 				/* check if pick is above or below visible indexes */
@@ -292,7 +299,7 @@ int main()
 
 		/* starting position at the bottom of list */
 		listy = listsize - nrows;
-		if (entries.ms <= (size_t)nrows) {
+		if (entries.ms <= nrows) {
 			/* pass */
 		} else {
 			const size_t top = nrows - 1;
