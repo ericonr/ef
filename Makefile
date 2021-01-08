@@ -1,13 +1,20 @@
-SRC = browser.c string-array.c util.c
+PREFIX = /usr/local
+
+SRC = ef.c string-array.c util.c
 OBJ = $(SRC:%.c=%.o)
-EXE = browser
+EXE = ef
 CFLAGS = -Wall -Wextra -g
 LDLIBS = -lcurses
 
+.PHONY: all install clean
+
 all: $(EXE)
 
-browser: $(OBJ)
+ef: $(OBJ)
 $(OBJ): string-array.h util.h
+
+install: all
+	install -Dm755 ef $(DESTDIR)$(PREFIX)/bin/ef
 
 clean:
 	rm -f $(EXE) $(OBJ)
