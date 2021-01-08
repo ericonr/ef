@@ -100,7 +100,7 @@ int main()
 		listsize = entries.n;
 
 		/* move to position where we show the end of the list */
-		listy = entries.n - nrows;
+		listy = listsize - nrows;
 	}
 
 	WINDOW *list = newpad(listsize, COLS);
@@ -115,11 +115,13 @@ int main()
 	mvwaddstr(prompt, 0, 0, "> ");
 	wrefresh(prompt);
 
-#define WRITELIST(idx) mvwaddstr(list, listsize - idx - 1, 0, get_entry(&entries, idx))
+	/* index in entries, index in matched */
+	#define WRITELIST(idx, idxm) mvwaddstr(list, listsize - idxm - 1, 0, get_entry(&entries, idx))
+
 	/* inital dump of list */
 	for (size_t i = 0; i < entries.n; i++) {
 		if (i == pick) wattrset(list, cattr);
-		WRITELIST(i);
+		WRITELIST(i,i);
 		if (i == pick) wattrset(list, nattr);
 	}
 	prefresh(list, listy, listx, 0, 0, nrows-1, COLS);
@@ -129,6 +131,8 @@ int main()
 	char *name = NULL;
 	/* search tokens */
 	struct str_array toks = { 0 };
+	/* index inside set of matches */
+	size_t index_in_matched = 0;
 	for (;;) {
 		if (!name) {
 			cap = 1024;
@@ -201,6 +205,9 @@ int main()
 		}
 
 		if (pos_change) {
+			/* bail out if there aren't any matches at all */
+			if (entries.ms == 0) continue;
+
 			const size_t old_pick = pick;
 			/* XXX: trusting integer overflow to work things out here */
 			for (size_t i = pick + pos_change; i < entries.n; i += pos_change) {
@@ -213,23 +220,21 @@ int main()
 
 			/* clean up appearance */
 			wattrset(list, nattr);
-			WRITELIST(old_pick);
+			WRITELIST(old_pick, index_in_matched);
 			wattrset(list, cattr);
-			WRITELIST(pick);
-			wattrset(list, nattr);
 
-			/* find index inside set of matches */
-			size_t index_in_matched = 0;
-			for (size_t i = 0; i < pick; i++) {
-				if (get_entry_match(&entries, i)) index_in_matched++;
-			}
+			/* we know there's another item in that direction */
+			index_in_matched += pos_change;
+
+			WRITELIST(pick, index_in_matched);
+			wattrset(list, nattr);
 
 			/* check if all matched entries fit in visible list */
 			if (entries.ms <= (size_t)nrows) {
 				/* pass */
 			} else {
-				/* check if pick is above or below */
-				const size_t bottom = (entries.ms) - (listy+nrows);
+				/* check if pick is above or below visible indexes */
+				const size_t bottom = listsize - (listy+nrows);
 				const size_t top = bottom + nrows - 1;
 				if (index_in_matched < bottom) listy++;
 				else if (index_in_matched > top) listy--;
@@ -246,23 +251,106 @@ int main()
 			waddch(prompt, ' ');
 			waddstr(prompt, e);
 		}
-		/* show space if string is empty */
+		/* show space if name is NULL */
 		if (!name) waddch(prompt, ' ');
-
 		wrefresh(prompt);
+		/* name==NULL means the search results won't change,
+		 * so we don't need to search again */
 		if (!name) continue;
 
 		filter_entries(&entries, &toks);
 
-		werase(list);
-		int line = 0;
-		for (size_t i = 0; i < entries.n; i++) {
-			const char *e = get_entry_if_match(&entries, i);
-			if (e) mvwaddstr(list, line++, 0, e);
+		/* keep index_in_matched if possible;
+		 * this will probably change what we have selected,
+		 * but it's what fzf does, for example.
+		 * we will find out what pick it corresponds to in the loop below */
+		if (index_in_matched >= entries.ms) {
+			if (entries.ms == 0) index_in_matched = 0;
+			else index_in_matched = entries.ms - 1;
 		}
-		/* reset vertical position when name changes */
-		listy = 0;
+
+		werase(list);
+		if (entries.ms == 0) {
+			/* don't loop through array if there aren't results */
+			listy = 0;
+			prefresh(list, listy, listx, 0, 0, nrows-1, COLS);
+			continue;
+		}
+		size_t line = 0;
+		for (size_t i = 0; i < entries.n; i++) {
+			if (get_entry_match(&entries, i)) {
+				if (line == index_in_matched) {
+					pick = i;
+					wattrset(list, cattr);
+				}
+				WRITELIST(i, line);
+				if (line == index_in_matched) wattrset(list, nattr);
+
+				line++;
+			}
+		}
+
+		/* starting position at the bottom of list */
+		listy = listsize - nrows;
+		if (entries.ms <= (size_t)nrows) {
+			/* pass */
+		} else {
+			const size_t top = nrows - 1;
+			/* fix listy so index_in_matched is in shown in view */
+			if (index_in_matched > top) {
+				size_t diff = index_in_matched - top;
+				/* (index_in_matched <= entries.ms <= listsize)
+				 * ([index_in_matched - nrows + 1] <= [listsize - nrows] + 1)
+				 * (diff <= listy + 1), which only guarantees (listy - diff >= -1).
+				 * therefore, the conditional is necessary */
+				if ((size_t)listy > diff) listy -= diff;
+				else listy = 0;
+			}
+		}
+
 		prefresh(list, listy, listx, 0, 0, nrows-1, COLS);
+
+#if 0
+		/* version that tries to keep the cursor over the *value* it was on,
+		 * instead of the *position* */
+		index_in_matched = 0;
+		if (get_entry_match(&entries, pick)) {
+			/* if pick is still in matched set, we need to find its new index there */
+			for (size_t i = 0; i < pick; i++) if (get_entry_match(&entries, i)) index_in_matched++;
+		} else if (entries.ms) {
+			/* we only try to find a new pick if we know it exists;
+			 * we use a lower value if available */
+			size_t old_pick = pick, prev_pick = 0;
+			for (size_t i = 0; i < entries.n && index_in_matched < entries.ms; i++) {
+				if (get_entry_match(&entries, i)) {
+					if (i > pick && index_in_matched) {
+						/* found match after old pick and there was at least one match before that,
+						 * so we select the one right before this new one */
+						pick = prev_pick;
+						break;
+					}
+					index_in_matched++;
+					prev_pick = i;
+				}
+			}
+			if (pick == old_pick) {
+				/* if it didn't set pick before, set now */
+				index_in_matched--;
+				pick = prev_pick;
+			}
+		}
+		/* print... */
+		listy = listsize - nrows;
+		if (entries.ms > nrows) {
+			const size_t top = nrows - 1;
+			if (index_in_matched > top) {
+				size_t diff = index_in_matched - top;
+				if ((size_t)listy > diff) listy -= diff;
+				else listy = 0;
+			}
+		}
+		/* refresh... */
+#endif
 	}
 
 	return 0;
