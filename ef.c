@@ -3,6 +3,7 @@
 #include <signal.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <stdbool.h>
 #include <string.h>
 #include <malloc.h>
@@ -49,16 +50,18 @@ int main()
 	sort_entries(&entries);
 	filter_entries(&entries, NULL);
 
-	int tmp_fd;
-	/* use stderr for input instead of stdin, since we get the entries from stdin */
-	if (dup2(STDERR_FILENO, STDIN_FILENO) != STDIN_FILENO ||
-	    /* use stderr for output as well, since we should only print the result to stdout */
-	    (tmp_fd = dup(STDOUT_FILENO)) < 0 ||
-	    (stdout_save = fdopen(tmp_fd, "w")) == NULL ||
-	    dup2(STDERR_FILENO, STDOUT_FILENO) != STDOUT_FILENO) {
+	/* use the controlling terminal as new stdin/stdout,
+	 * since the process ones are used for input and output */
+	int tty_fd, stdout_save_fd;
+	if ((tty_fd = open("/dev/tty", O_RDWR | O_CLOEXEC)) < 0 ||
+	    (stdout_save_fd = dup(STDOUT_FILENO)) < 0 ||
+	    (stdout_save = fdopen(stdout_save_fd, "we")) == NULL ||
+	    dup2(tty_fd, STDIN_FILENO) != STDIN_FILENO ||
+	    dup2(tty_fd, STDOUT_FILENO) != STDOUT_FILENO) {
 		perror("fd dance");
 		exit(1);
 	}
+	close(tty_fd);
 
 	atexit(print_name);
 
