@@ -9,12 +9,13 @@ void read_entries_from_stream(struct str_array *a, int delim, FILE *input)
 	size_t tmp = 0;
 	ssize_t n;
 	while ((n = getdelim(&line, &tmp, delim, input)) >= 0) {
-		if (n == 1) {
+		if (n == 0 || n == 1 && line[0] == delim) {
 			/* don't match empty line */
 			free(line);
+			line = NULL;
 			continue;
 		}
-		if (line[n-1] == '\n') line[n-1] = 0;
+		if (line[n-1] == delim) line[n-1] = '\0';
 		add_entry(a, line);
 
 		line = NULL;
