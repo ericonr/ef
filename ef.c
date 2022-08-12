@@ -35,11 +35,26 @@ static void signal_handler(int signum)
 	write(signal_pipe[1], &signum, sizeof signum);
 }
 
-int main()
+int main(int argc, char **argv)
 {
 	setlocale(LC_ALL, "");
 
-	const char delim = '\n';
+	char delim = '\n';
+
+	int opt;
+	while ((opt = getopt(argc, argv, "01")) != -1) {
+		switch (opt) {
+			case '0':
+				/* set delimiter to NUL char instead of newline */
+				delim = '\0';
+				break;
+			case '1':
+				/* ignored for compatibility with fzf */
+				break;
+			default:
+				exit(1);
+		}
+	}
 
 	if (pipe(signal_pipe)) {
 		perror("pipe");
