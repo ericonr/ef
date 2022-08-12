@@ -66,7 +66,18 @@ int main(int argc, char **argv)
 	}
 
 	struct str_array entries = { 0 };
-	read_entries_from_stream(&entries, delim, stdin);
+	/* create our own stream for standard input,
+	 * so stdin is fresh when we use it with our new file descriptor below */
+	int stdin_dup;
+	FILE *original_stdin;
+	if ((stdin_dup = dup(STDIN_FILENO)) < 0 ||
+	    (original_stdin = fdopen(stdin_dup, "r")) == NULL) {
+		perror("stdin handling");
+		exit(1);
+	}
+	read_entries_from_stream(&entries, delim, original_stdin);
+	fclose(original_stdin);
+
 	/* fast exit cases */
 	if (entries.n == 0) exit(0);
 	if (entries.n == 1) {
