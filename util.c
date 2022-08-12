@@ -26,12 +26,12 @@ void *xmalloc(size_t s) {
 	void *r = malloc(s);
 	if (r) return r;
 	perror("malloc");
-	exit(1);
+	quick_exit(1);
 }
 
 void *xrealloc(void *p, size_t s) {
 	void *r = realloc(p, s);
 	if (r) return r;
 	perror("realloc");
-	exit(1);
+	quick_exit(1);
 }

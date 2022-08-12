@@ -7,6 +7,8 @@
 #include <stdbool.h>
 #include <string.h>
 #include <malloc.h>
+#include <poll.h>
+#include <errno.h>
 #include <locale.h>
 
 #include <curses.h>
@@ -17,6 +19,7 @@
 static void endwin_void(void)
 {
 	endwin();
+	fflush(stdout);
 }
 
 static const char *final_name;
@@ -26,10 +29,10 @@ static void print_name(void)
 	if (stdout_save && final_name) fputs(final_name, stdout_save);
 }
 
-static void finish(int sig)
+static int signal_pipe[2];
+static void signal_handler(int signum)
 {
-	(void)sig;
-	quick_exit(1);
+	write(signal_pipe[1], &signum, sizeof signum);
 }
 
 int main()
@@ -37,6 +40,15 @@ int main()
 	setlocale(LC_ALL, "");
 
 	const char delim = '\n';
+
+	if (pipe(signal_pipe)) {
+		perror("pipe");
+		exit(1);
+	}
+	if (signal(SIGINT, signal_handler) || signal(SIGTERM, signal_handler)) {
+		perror("signal");
+		exit(1);
+	}
 
 	struct str_array entries = { 0 };
 	read_entries_from_stream(&entries, delim, stdin);
@@ -63,14 +75,18 @@ int main()
 	}
 	close(tty_fd);
 
-	atexit(print_name);
+	enum { SIGNAL, STDIN, POLLFD_AMOUNT };
+	struct pollfd polls[POLLFD_AMOUNT] = {
+		[SIGNAL] = {signal_pipe[0], POLLIN, 0},
+		[STDIN] = {STDIN_FILENO, POLLIN, 0},
+	};
 
-	signal(SIGINT, finish);
-	atexit(endwin_void);
-	at_quick_exit(endwin_void);
+	atexit(print_name);
 
 	/* curses initialization */
 	initscr();
+	at_quick_exit(endwin_void);
+	atexit(endwin_void);
 	/* terminal configuration */
 	nonl();
 	cbreak();
@@ -117,7 +133,7 @@ int main()
 	WINDOW *prompt = newwin(1, 0, LINES - 1, 0);
 	if (!list || !prompt) {
 		perror("newwin");
-		exit(1);
+		quick_exit(1);
 	}
 	keypad(prompt, TRUE);
 
@@ -144,6 +160,23 @@ int main()
 	/* index inside set of matches */
 	size_t index_in_matched = 0;
 	for (;;) {
+		if (poll(polls, POLLFD_AMOUNT, -1) < 0) {
+			if (errno == EINTR) continue;
+
+			perror("poll");
+			quick_exit(1);
+		}
+
+		if (polls[SIGNAL].revents & POLLIN) {
+			int signum;
+			read(polls[SIGNAL].fd, &signum, sizeof signum);
+			if (signum == SIGINT || signum == SIGTERM) {
+				quick_exit(1);
+			}
+		}
+
+		if (!(polls[STDIN].revents & POLLIN)) continue;
+
 		if (!name) {
 			cap = 1024;
 			name = xmalloc(cap);
@@ -157,7 +190,7 @@ int main()
 		int c = wgetch(prompt);
 		switch (c) {
 			case 27: /* Ctrl+[ or ESC */
-				exit(1);
+				quick_exit(1);
 				break;
 
 			case KEY_ENTER:
