@@ -6,6 +6,7 @@
 #include <fcntl.h>
 #include <stdbool.h>
 #include <string.h>
+#include <ctype.h>
 #include <malloc.h>
 #include <poll.h>
 #include <errno.h>
@@ -263,14 +264,19 @@ int main(int argc, char **argv)
 				break;
 
 			default:
-				if (n == cap) {
-					cap *= 2;
-					name = xrealloc(name, cap);
+				/* XXX: not unicode aware;
+				 * this is reasonable for now, since otherwise we'd have to
+				 * implement character deletion with unicode */
+				if (isprint((unsigned char)c)) {
+					if (n == cap) {
+						cap *= 2;
+						name = xrealloc(name, cap);
+					}
+					name[n] = c;
+					n++;
+					/* clear chars from previous entries and/or dirty memory */
+					name[n] = 0;
 				}
-				name[n] = c;
-				n++;
-				/* clear chars from previous entries and/or dirty memory */
-				name[n] = 0;
 				break;
 		}
 
