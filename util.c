@@ -23,6 +23,19 @@ void read_entries_from_stream(struct str_array *a, int delim, FILE *input)
 	}
 }
 
+void print_prompt(WINDOW *w, struct str_array *a, bool show_space)
+{
+	werase(w);
+	mvwaddstr(w, 0, 0, ">");
+	for (size_t i = 0; i < a->n; i++) {
+		const char *e = get_entry(a, i);
+		waddch(w, ' ');
+		waddstr(w, e);
+	}
+	if (show_space) waddch(w, ' ');
+	wrefresh(w);
+}
+
 void *xmalloc(size_t s) {
 	void *r = malloc(s);
 	if (r) return r;

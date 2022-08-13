@@ -165,10 +165,6 @@ int main(int argc, char **argv)
 	}
 	keypad(prompt, TRUE);
 
-	/* initial prompt */
-	mvwaddstr(prompt, 0, 0, "> ");
-	wrefresh(prompt);
-
 	/* index in entries, index in matched;
 	 * this function could include a wclrtoeol call, but that only hides indexing issues */
 	#define WRITELIST(idx, idxm) \
@@ -188,6 +184,8 @@ int main(int argc, char **argv)
 	char *name = NULL;
 	/* search tokens */
 	struct str_array toks = { 0 };
+	print_prompt(prompt, &toks, true);
+
 	/* index inside set of matches */
 	size_t index_in_matched = 0;
 	for (;;) {
@@ -317,16 +315,9 @@ int main(int argc, char **argv)
 			continue;
 		}
 
-		werase(prompt);
-		mvwaddstr(prompt, 0, 0, ">");
-		for (size_t i = 0; i < toks.n; i++) {
-			const char *e = get_entry(&toks, i);
-			waddch(prompt, ' ');
-			waddstr(prompt, e);
-		}
 		/* show space if name is NULL */
-		if (!name) waddch(prompt, ' ');
-		wrefresh(prompt);
+		print_prompt(prompt, &toks, !name);
+
 		/* name==NULL means the search results won't change,
 		 * so we don't need to search again */
 		if (!name) continue;
