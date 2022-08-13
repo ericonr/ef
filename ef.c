@@ -84,7 +84,6 @@ int main(int argc, char **argv)
 		puts(get_entry(&entries, 0));
 		exit(0);
 	}
-	/* end of fast exit cases */
 	sort_entries(&entries);
 	filter_entries(&entries, NULL);
 
@@ -167,8 +166,10 @@ int main(int argc, char **argv)
 	mvwaddstr(prompt, 0, 0, "> ");
 	wrefresh(prompt);
 
-	/* index in entries, index in matched */
-	#define WRITELIST(idx, idxm) mvwaddstr(list, listsize - idxm - 1, 0, get_entry(&entries, idx))
+	/* index in entries, index in matched;
+	 * this function could include a wclrtoeol call, but that only hides indexing issues */
+	#define WRITELIST(idx, idxm) \
+		do{mvwaddstr(list, listsize - idxm - 1, 0, get_entry(&entries, idx));}while(0)
 
 	/* inital dump of list */
 	for (size_t i = 0; i < entries.n; i++) {
