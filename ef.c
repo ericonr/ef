@@ -17,6 +17,8 @@
 #include "string-array.h"
 #include "util.h"
 
+#define MAX_TOK_LEN 128
+
 static void endwin_void(void)
 {
 	endwin();
@@ -181,7 +183,8 @@ int main(int argc, char **argv)
 	prefresh(list, listy, listx, 0, 0, nrows-1, COLS);
 
 	/* variables to control current search token */
-	size_t n, cap;
+	const size_t cap = MAX_TOK_LEN; /* words bigger than this aren't allowed */
+	size_t n;
 	char *name = NULL;
 	/* search tokens */
 	struct str_array toks = { 0 };
@@ -206,7 +209,6 @@ int main(int argc, char **argv)
 		if (!(polls[STDIN].revents & POLLIN)) continue;
 
 		if (!name) {
-			cap = 1024;
 			name = xmalloc(cap);
 
 			n = 0;
@@ -249,7 +251,6 @@ int main(int argc, char **argv)
 				if (toks.n > 1 && n == 0) {
 					free(pop_entry(&toks));
 					name = get_entry(&toks, toks.n - 1);
-					cap = malloc_usable_size(name);
 					n = strlen(name);
 					break;
 				}
@@ -267,11 +268,7 @@ int main(int argc, char **argv)
 				/* XXX: not unicode aware;
 				 * this is reasonable for now, since otherwise we'd have to
 				 * implement character deletion with unicode */
-				if (isprint((unsigned char)c)) {
-					if (n == cap) {
-						cap *= 2;
-						name = xrealloc(name, cap);
-					}
+				if (n < cap && isprint((unsigned char)c)) {
 					name[n] = c;
 					n++;
 					/* clear chars from previous entries and/or dirty memory */
