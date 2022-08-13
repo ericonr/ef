@@ -43,9 +43,10 @@ int main(int argc, char **argv)
 	setlocale(LC_ALL, "");
 
 	char delim = '\n';
+	char *query = NULL;
 
 	int opt;
-	while ((opt = getopt(argc, argv, "01")) != -1) {
+	while ((opt = getopt(argc, argv, "01q:")) != -1) {
 		switch (opt) {
 			case '0':
 				/* set delimiter to NUL char instead of newline */
@@ -53,6 +54,10 @@ int main(int argc, char **argv)
 				break;
 			case '1':
 				/* ignored for compatibility with fzf */
+				break;
+			case 'q':
+				/* initial query */
+				query = optarg;
 				break;
 			default:
 				exit(1);
@@ -184,6 +189,16 @@ int main(int argc, char **argv)
 	char *name = NULL;
 	/* search tokens */
 	struct str_array toks = { 0 };
+
+	if (query) {
+		/* the intial query can be edited,
+		 * so it needs to be the same sort of storage */
+		name = xmalloc(cap);
+		strncpy(name, query, cap);
+		add_entry(&toks, name);
+
+		name = NULL;
+	}
 	print_prompt(prompt, &toks, true);
 
 	/* index inside set of matches */
